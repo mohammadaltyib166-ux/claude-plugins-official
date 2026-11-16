@@ -71,6 +71,12 @@ DEFAULTS = {
 
 
 # ---------------------------------------------------------------- helpers
+def use_nodes(block):
+    # node trees are always on from Blender 6; the flag only exists before that
+    if hasattr(block, "use_nodes") and not block.use_nodes:
+        block.use_nodes = True
+
+
 def hex_rgb(h):
     h = h.lstrip("#")
     srgb = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
@@ -103,7 +109,7 @@ def has_arabic(s):
 def material(name, color=None, image=None, unlit=False, alpha_from_image=False, mask=False,
              roughness=0.35):
     m = bpy.data.materials.new(name)
-    m.use_nodes = True
+    use_nodes(m)
     nt = m.node_tree
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputMaterial")
@@ -437,7 +443,7 @@ def setup(spec, workdir):
     _, r, floor_z, frame_r = build_subject(spec, workdir)
     amb = build_lights(spec["lighting"], r)
     world = bpy.data.worlds.new("world")
-    world.use_nodes = True
+    use_nodes(world)
     bg = world.node_tree.nodes["Background"]
     transparent = spec["background"] == "transparent"
     bg_rgb = (0.5, 0.5, 0.5) if transparent else hex_rgb(spec["background"])
