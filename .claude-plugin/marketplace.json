@@ -4169,6 +4169,13 @@
       "homepage": "https://www.vibeprospecting.ai/product/claude-plugin"
     },
     {
+      "name": "video-director",
+      "description": "Direct and finish YouTube, Reels and tutorial videos with FFmpeg, OpusClip and Blender: content analysis, color grading, transitions, Arabic-safe captions and titles, motion graphics, sound effects, camera moves and 3D shots.",
+      "category": "design",
+      "source": "./external_plugins/video-director",
+      "homepage": "https://github.com/mohammadaltyib166-ux/claude-plugins-official/tree/main/external_plugins/video-director"
+    },
+    {
       "name": "vsql-extension-builder",
       "description": "Builds a VillageSQL extension for MySQL end-to-end through a 7-phase persona-driven workflow. Commonly used to port PostgreSQL extensions to MySQL.",
       "author": {
