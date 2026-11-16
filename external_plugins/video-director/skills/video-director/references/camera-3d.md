@@ -108,9 +108,19 @@ Keep 3D inserts short (2-4 s), use 24 fps for them, render `draft` for Reels
 {"output":"shots/step1.mp4","subject":{"type":"text3d","text":"STEP 1"},"color":"#2EC4B6",
  "lighting":"dramatic","camera":{"move":"dolly_zoom","angle":"eye"}}
 ```
+```json
+{"output":"shots/perfume_hero.mp4","aspect":"9:16","duration":4,"fps":24,"samples":8,
+ "subject":{"type":"primitive","shape":"perfume","label":"LAYL","label_font":"fonts/BebasNeue-Regular.ttf"},
+ "color":"#E0962F","background":"#07080B","floor_gloss":true,"lighting":"luxury",
+ "camera":{"move":"orbit","angle":"low","lens":50,"degrees":60,"start_azimuth":-40}}
+```
+`camera.margin` (default 1.3) sets how much room is left around the subject:
+0.5 is a close-up on the middle of the subject, 2+ leaves space for titles.
 
 Subjects:
 - `primitive`: cube, sphere, cylinder, cone, torus, monkey - placeholders, abstract intros.
+- `primitive` + `"shape": "perfume"`: a glass perfume bottle with tinted liquid (`color`), gold neck and
+  cap (`accent`), and an optional Latin `label` (`label_font` for a .ttf). For product ads without a model.
 - `model`: .glb/.gltf (best), .obj, .fbx, .stl. Auto-scaled and centered. `"recolor": true` paints it `color`.
 - `image`: any PNG/JPG on a card; `thickness` adds a device-like slab. Screenshots, photos, slides, thumbnails.
 - `text`: any language, Arabic included, shaped by libass, as a flat card (with optional slab). Pass a `.ttf` path.
@@ -121,7 +131,12 @@ an alpha shot to overlay on footage; the floor becomes a shadow catcher.
 `view`: `standard` keeps exact brand colors; `agx` is softer and photographic.
 
 Lighting: `studio` (three-point, neutral), `soft` (bright, friendly, tutorials),
-`dramatic` (side key + rim, dark), `neon` (pink/cyan, tech, Reels).
+`dramatic` (side key + rim, dark), `neon` (pink/cyan, tech, Reels), `luxury` (warm key,
+cool rim, tall strip lights for glass and metal edges, and a warm glow behind the subject;
+perfume, jewelry, watches, premium products).
+`floor_gloss: true` gives a reflective floor. `samples` overrides samples per pixel
+(8 with denoising is enough for drafts). Glass subjects raise light bounces
+automatically; expect about 5 s per draft frame at 540x960 on 4 cores.
 
 Match the 3D shot to DIRECTION.md: same accent color, same font, background
 close to the graded footage's tone, same aspect and fps as the edit (the

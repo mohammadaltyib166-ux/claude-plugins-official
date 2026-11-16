@@ -22,6 +22,7 @@ Spec (all keys optional):
   "quality": "draft",            # preview (25%, 8 spp) | draft (50%, 16 spp) | final (100%, 64 spp)
   "duration": 3.0, "fps": 30,
   "subject": {"type": "primitive", "shape": "cube"},
+     # {"type":"primitive","shape":"perfume","label":"LAYL","accent":"#C9A24A"}  (color = liquid)
      # {"type":"model","path":"phone.glb"}
      # {"type":"image","path":"screenshot.png","thickness":0.04}
      # {"type":"text","text":"الدرس الأول","font":"fonts/Tajawal-ExtraBold.ttf"}
@@ -29,7 +30,9 @@ Spec (all keys optional):
   "color": "#4C7DFF",            # subject color (primitive, text, text3d)
   "background": "#101418",       # hex or "transparent"
   "floor": true,
-  "lighting": "studio",          # studio | soft | dramatic | neon
+  "lighting": "studio",          # studio | soft | dramatic | neon | luxury
+  "floor_gloss": false,          # glossy floor with reflections
+  "samples": null,               # override samples per pixel
   "view": "standard",            # standard (exact colors) | agx (soft, photographic)
   "camera": {"move": "orbit", "angle": "eye", "lens": 50, "degrees": 60,
              "start_azimuth": -30, "ease": "ease_in_out", "dof": false, "fstop": 2.8,
@@ -207,12 +210,74 @@ def text_mask_png(text, font, out_png, px=220):
     return out_png
 
 
+def shader(name, color, metallic=0.0, roughness=0.3, transmission=0.0, ior=1.5):
+    m = bpy.data.materials.new(name)
+    use_nodes(m)
+    b = m.node_tree.nodes.get("Principled BSDF")
+    b.inputs["Base Color"].default_value = (*color, 1)
+    b.inputs["Metallic"].default_value = metallic
+    b.inputs["Roughness"].default_value = roughness
+    b.inputs["Transmission Weight"].default_value = transmission
+    b.inputs["IOR"].default_value = ior
+    return m
+
+
+def rounded_box(name, size, loc, bevel, mat, segments=6):
+    bpy.ops.mesh.primitive_cube_add(size=1, location=loc)
+    o = bpy.context.object
+    o.name = name
+    o.scale = size
+    bpy.ops.object.transform_apply(scale=True)
+    m = o.modifiers.new("bevel", "BEVEL")
+    m.width, m.segments = bevel, segments
+    bpy.ops.object.shade_smooth()
+    o.data.materials.append(mat)
+    return o
+
+
+def perfume_bottle(sub, liquid_rgb):
+    """Glass body, tinted liquid, gold neck and cap, gold label. About 2 units tall."""
+    gold = hex_rgb(sub.get("accent", "#C9A24A"))
+    glass = shader("glass", hex_rgb(sub.get("glass", "#F4F6FA")), roughness=0.02, transmission=1.0, ior=1.45)
+    liquid = shader("liquid", liquid_rgb, roughness=0.05, transmission=1.0, ior=1.33)
+    metal = shader("gold", gold, metallic=1.0, roughness=0.18)
+    W, D, H = 1.15, 0.5, 1.25           # body
+    parts = [rounded_box("body", (W, D, H), (0, 0, 0), 0.09, glass),
+             rounded_box("liquid", (W - 0.16, D - 0.14, H * 0.78), (0, 0, -H * 0.11 + 0.02), 0.05, liquid)]
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.13, depth=0.14, vertices=48, location=(0, 0, H / 2 + 0.06))
+    neck = bpy.context.object
+    bpy.ops.object.shade_smooth()
+    neck.data.materials.append(metal)
+    cap = rounded_box("cap", (0.62, 0.42, 0.5), (0, 0, H / 2 + 0.38), 0.05, metal, segments=4)
+    parts += [neck, cap]
+    label = str(sub.get("label", "")).strip()
+    if label:
+        if has_arabic(label):
+            sys.exit("bottle label must be Latin (Blender cannot shape Arabic); put Arabic in the titles")
+        bpy.ops.object.text_add(location=(0, -D / 2 - 0.004, 0.08))
+        t = bpy.context.object
+        t.data.body = label
+        t.data.align_x, t.data.align_y = "CENTER", "CENTER"
+        t.data.size = float(sub.get("label_size", 0.26))
+        t.data.extrude = 0.006
+        t.data.space_character = 1.25
+        if sub.get("label_font"):
+            t.data.font = bpy.data.fonts.load(sub["label_font"])
+        t.rotation_euler = (math.radians(90), 0, 0)
+        t.data.materials.append(metal)
+        bpy.ops.object.convert(target="MESH")
+        parts.append(bpy.context.object)
+    return parts
+
+
 # ---------------------------------------------------------------- scene
 def build_subject(spec, workdir):
     sub, color = spec["subject"], hex_rgb(spec["color"])
     kind = sub.get("type", "primitive")
     objs = []
-    if kind == "primitive":
+    if kind == "primitive" and sub.get("shape") == "perfume":
+        objs = perfume_bottle(sub, color)
+    elif kind == "primitive":
         shape = sub.get("shape", "cube")
         add = {"cube": lambda: bpy.ops.mesh.primitive_cube_add(size=1.6),
                "sphere": lambda: bpy.ops.mesh.primitive_uv_sphere_add(radius=1, segments=64, ring_count=32),
@@ -304,9 +369,11 @@ def build_subject(spec, workdir):
     return pivot, radius, -half.z, frame_r  # floor height = bottom of subject
 
 
-def add_area(name, loc, target, energy, size, color=(1, 1, 1)):
+def add_area(name, loc, target, energy, size, color=(1, 1, 1), size_y=None):
     d = bpy.data.lights.new(name, "AREA")
     d.energy, d.size, d.color = energy, size, color
+    if size_y:
+        d.shape, d.size_y = "RECTANGLE", size_y
     o = bpy.data.objects.new(name, d)
     bpy.context.scene.collection.objects.link(o)
     o.location = loc
@@ -317,6 +384,40 @@ def add_area(name, loc, target, energy, size, color=(1, 1, 1)):
 def sph(az, el, dist):
     a, e = math.radians(az), math.radians(el)
     return Vector((dist * math.sin(a) * math.cos(e), -dist * math.cos(a) * math.cos(e), dist * math.sin(e)))
+
+
+def glow_backdrop(r, color=(1.0, 0.55, 0.18), strength=1.4):
+    """A soft warm halo behind the subject; glass and liquid glow when seen against it."""
+    size = r * 16  # large, so its edges never enter the frame
+    bpy.ops.mesh.primitive_plane_add(size=size, location=(0, r * 3.0, r * 0.2),
+                                     rotation=(math.radians(90), 0, 0))
+    o = bpy.context.object
+    m = bpy.data.materials.new("glow")
+    use_nodes(m)
+    nt = m.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    coord = nt.nodes.new("ShaderNodeTexCoord")
+    mapping = nt.nodes.new("ShaderNodeMapping")
+    mapping.inputs["Scale"].default_value = (1 / (r * 2.0),) * 3  # halo radius ~2 r
+    grad = nt.nodes.new("ShaderNodeTexGradient")
+    grad.gradient_type = "SPHERICAL"
+    em = nt.nodes.new("ShaderNodeEmission")
+    em.inputs["Color"].default_value = (*color, 1)
+    math_node = nt.nodes.new("ShaderNodeMath")
+    math_node.operation = "POWER"
+    math_node.inputs[1].default_value = 2.0
+    mul = nt.nodes.new("ShaderNodeMath")
+    mul.operation = "MULTIPLY"
+    mul.inputs[1].default_value = strength
+    nt.links.new(coord.outputs["Object"], mapping.inputs["Vector"])
+    nt.links.new(mapping.outputs["Vector"], grad.inputs["Vector"])
+    nt.links.new(grad.outputs["Fac"], math_node.inputs[0])
+    nt.links.new(math_node.outputs[0], mul.inputs[0])
+    nt.links.new(mul.outputs[0], em.inputs["Strength"])
+    nt.links.new(em.outputs[0], out.inputs[0])
+    o.data.materials.append(m)
+    return o
 
 
 def build_lights(preset, r):
@@ -330,6 +431,14 @@ def build_lights(preset, r):
         add_area("key", sph(-80, 20, L), (0, 0, 0), 1400 * k, L * 0.3)
         add_area("rim", sph(150, 35, L), (0, 0, 0), 900 * k, L * 0.3)
         return 0.05
+    if preset == "luxury":  # warm key, cool rim, tall strips that draw edges on glass and metal
+        add_area("key", sph(-65, 22, L), (0, 0, 0), 1200 * k, L * 0.25, (1.0, 0.78, 0.5))
+        add_area("rim", sph(165, 30, L), (0, 0, 0), 900 * k, L * 0.3, (0.6, 0.75, 1.0))
+        add_area("strip_l", sph(-120, 5, L * 0.8), (0, 0, 0), 500 * k, L * 0.06, (1.0, 0.9, 0.75), L * 0.9)
+        add_area("strip_r", sph(120, 5, L * 0.8), (0, 0, 0), 500 * k, L * 0.06, (1.0, 0.9, 0.75), L * 0.9)
+        add_area("top", sph(0, 85, L), (0, 0, 0), 150 * k, L * 0.4)
+        glow_backdrop(r)
+        return 0.02
     if preset == "neon":
         add_area("pink", sph(-70, 15, L), (0, 0, 0), 1100 * k, L * 0.6, (1.0, 0.15, 0.6))
         add_area("cyan", sph(70, 15, L), (0, 0, 0), 1100 * k, L * 0.6, (0.1, 0.8, 1.0))
@@ -439,6 +548,11 @@ def setup(spec, workdir):
     if spec["quality"] != "final":
         s.cycles.max_bounces, s.cycles.diffuse_bounces, s.cycles.glossy_bounces = 4, 2, 2
         s.cycles.transmission_bounces, s.cycles.transparent_max_bounces = 2, 4
+        if spec["subject"].get("shape") == "perfume" or spec.get("glass"):
+            # light must pass through glass and liquid several times
+            s.cycles.max_bounces, s.cycles.transmission_bounces, s.cycles.glossy_bounces = 8, 8, 3
+    if spec.get("samples"):
+        s.cycles.samples = int(spec["samples"])
 
     _, r, floor_z, frame_r = build_subject(spec, workdir)
     amb = build_lights(spec["lighting"], r)
@@ -458,7 +572,7 @@ def setup(spec, workdir):
             fl.is_shadow_catcher = True
         else:
             fl.data.materials.append(material("floor", color=tuple(min(1, c * 1.15 + 0.004) for c in bg_rgb),
-                                              roughness=0.6))
+                                              roughness=0.15 if spec.get("floor_gloss") else 0.6))
     animate_camera(spec, r, floor_z, frames, frame_r)
     return frames, transparent
 
