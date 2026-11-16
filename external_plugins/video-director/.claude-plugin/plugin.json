@@ -1,0 +1,9 @@
+{
+  "name": "video-director",
+  "description": "Direct and finish YouTube, Reels and tutorial videos with FFmpeg, OpusClip and Blender: content analysis, color grading, transitions, Arabic-safe captions and titles, motion graphics, sound effects, camera moves and 3D shots.",
+  "version": "0.1.0",
+  "author": {
+    "name": "mohammadaltyib166-ux"
+  },
+  "keywords": ["video", "ffmpeg", "color-grading", "transitions", "captions", "arabic", "sound-design", "blender", "3d", "camera"]
+}
